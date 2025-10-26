@@ -2,45 +2,527 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Fetch /terms Demo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Neurosynth Explorer - Brain Mapping Terms</title>
+
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+
+  <!-- Font Awesome for Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+
+  <style>
+    /* Custom animations */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .fade-in {
+      animation: fadeIn 0.3s ease-out;
+    }
+
+    .term-card:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 25px rgba(0,0,0,0.15);
+    }
+
+    .term-card {
+      transition: all 0.3s ease;
+    }
+
+    /* Loading spinner */
+    .spinner {
+      border: 3px solid rgba(59, 130, 246, 0.1);
+      border-top-color: rgb(59, 130, 246);
+      border-radius: 50%;
+      width: 40px;
+      height: 40px;
+      animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    /* Gradient background */
+    .gradient-bg {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+  </style>
 </head>
-<body>
-  <h1>Fetch https://mil.psy.ntu.edu.tw:5000/terms</h1>
-  <button id="btn">Fetch again</button>
-  <pre id="out">Loading…</pre>
+<body class="bg-gray-50 min-h-screen">
+
+  <!-- Header -->
+  <header class="gradient-bg text-white shadow-lg">
+    <div class="container mx-auto px-4 py-6">
+      <div class="flex items-center justify-between">
+        <div class="flex items-center space-x-3">
+          <i class="fas fa-brain text-3xl"></i>
+          <div>
+            <h1 class="text-3xl font-bold">Neurosynth Explorer</h1>
+            <p class="text-purple-200 text-sm">Brain Mapping Meta-Analysis</p>
+          </div>
+        </div>
+        <div class="text-sm text-purple-200">
+          <i class="fas fa-server"></i> mil.psy.ntu.edu.tw
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <nav class="bg-white shadow-md sticky top-0 z-10">
+    <div class="container mx-auto px-4">
+      <div class="flex space-x-1">
+        <button onclick="showTab('terms')" id="tab-terms" class="tab-btn px-6 py-4 font-semibold text-gray-600 border-b-4 border-transparent hover:border-blue-500 hover:text-blue-600 transition-all">
+          <i class="fas fa-list mr-2"></i>All Terms
+        </button>
+        <button onclick="showTab('search')" id="tab-search" class="tab-btn px-6 py-4 font-semibold text-gray-600 border-b-4 border-transparent hover:border-blue-500 hover:text-blue-600 transition-all">
+          <i class="fas fa-search mr-2"></i>Related Terms
+        </button>
+        <button onclick="showTab('query')" id="tab-query" class="tab-btn px-6 py-4 font-semibold text-gray-600 border-b-4 border-transparent hover:border-blue-500 hover:text-blue-600 transition-all">
+          <i class="fas fa-filter mr-2"></i>Logical Query
+        </button>
+      </div>
+    </div>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="container mx-auto px-4 py-8">
+
+    <!-- Tab 1: All Terms -->
+    <div id="content-terms" class="tab-content hidden">
+      <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <div class="flex items-center justify-between mb-4">
+          <h2 class="text-2xl font-bold text-gray-800">
+            <i class="fas fa-book-medical text-blue-500 mr-2"></i>
+            All Available Terms
+          </h2>
+          <button onclick="fetchAllTerms()" class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg transition-colors">
+            <i class="fas fa-sync-alt mr-2"></i>Refresh
+          </button>
+        </div>
+        <p class="text-gray-600 mb-4">Browse all neuroscience terms available in the database</p>
+
+        <!-- Search filter -->
+        <div class="mb-4">
+          <input type="text" id="terms-filter" placeholder="Filter terms..." class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent" onkeyup="filterTerms()">
+        </div>
+      </div>
+
+      <div id="terms-loading" class="flex justify-center items-center py-20">
+        <div class="spinner"></div>
+      </div>
+
+      <div id="terms-error" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg"></div>
+
+      <div id="terms-results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4"></div>
+    </div>
+
+    <!-- Tab 2: Related Terms Search -->
+    <div id="content-search" class="tab-content hidden">
+      <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">
+          <i class="fas fa-project-diagram text-green-500 mr-2"></i>
+          Find Related Terms
+        </h2>
+        <p class="text-gray-600 mb-6">Search for terms associated with a specific brain region or concept</p>
+
+        <div class="flex gap-3">
+          <input type="text" id="search-input" placeholder="Enter a term (e.g., amygdala, emotion, memory)..." class="flex-1 px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent text-lg" onkeypress="if(event.key==='Enter') searchRelatedTerms()">
+          <button onclick="searchRelatedTerms()" class="bg-green-500 hover:bg-green-600 text-white px-8 py-3 rounded-lg font-semibold transition-colors">
+            <i class="fas fa-search mr-2"></i>Search
+          </button>
+        </div>
+
+        <div class="mt-4 flex flex-wrap gap-2">
+          <span class="text-sm text-gray-600">Quick examples:</span>
+          <button onclick="quickSearch('amygdala')" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-full transition-colors">amygdala</button>
+          <button onclick="quickSearch('emotion')" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-full transition-colors">emotion</button>
+          <button onclick="quickSearch('memory')" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-full transition-colors">memory</button>
+          <button onclick="quickSearch('attention')" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-full transition-colors">attention</button>
+        </div>
+      </div>
+
+      <div id="search-loading" class="hidden flex justify-center items-center py-20">
+        <div class="spinner"></div>
+      </div>
+
+      <div id="search-error" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg"></div>
+
+      <div id="search-results"></div>
+    </div>
+
+    <!-- Tab 3: Logical Query -->
+    <div id="content-query" class="tab-content hidden">
+      <div class="bg-white rounded-lg shadow-lg p-6 mb-6">
+        <h2 class="text-2xl font-bold text-gray-800 mb-4">
+          <i class="fas fa-brain text-purple-500 mr-2"></i>
+          Logical Query Search
+        </h2>
+        <p class="text-gray-600 mb-6">Perform advanced searches using logical operators (AND, OR, NOT)</p>
+
+        <div class="mb-4">
+          <label class="block text-sm font-semibold text-gray-700 mb-2">Query Expression:</label>
+          <input type="text" id="query-input" placeholder="e.g., amygdala not emotion" class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-transparent text-lg" onkeypress="if(event.key==='Enter') executeQuery()">
+        </div>
+
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+          <h3 class="font-semibold text-blue-800 mb-2">
+            <i class="fas fa-info-circle mr-2"></i>Query Syntax:
+          </h3>
+          <ul class="text-sm text-blue-700 space-y-1">
+            <li><code class="bg-blue-100 px-2 py-1 rounded">term1 and term2</code> - Studies with both terms</li>
+            <li><code class="bg-blue-100 px-2 py-1 rounded">term1 or term2</code> - Studies with either term</li>
+            <li><code class="bg-blue-100 px-2 py-1 rounded">term1 not term2</code> - Studies with term1 but not term2</li>
+            <li><code class="bg-blue-100 px-2 py-1 rounded">(term1 and term2) or term3</code> - Use parentheses for complex queries</li>
+          </ul>
+        </div>
+
+        <div class="flex gap-3">
+          <button onclick="executeQuery()" class="bg-purple-500 hover:bg-purple-600 text-white px-8 py-3 rounded-lg font-semibold transition-colors flex-1">
+            <i class="fas fa-play mr-2"></i>Execute Query
+          </button>
+          <button onclick="clearQuery()" class="bg-gray-300 hover:bg-gray-400 text-gray-700 px-6 py-3 rounded-lg font-semibold transition-colors">
+            <i class="fas fa-times mr-2"></i>Clear
+          </button>
+        </div>
+
+        <div class="mt-4 flex flex-wrap gap-2">
+          <span class="text-sm text-gray-600">Examples:</span>
+          <button onclick="quickQuery('amygdala not emotion')" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-full transition-colors">amygdala not emotion</button>
+          <button onclick="quickQuery('memory and hippocampus')" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-full transition-colors">memory and hippocampus</button>
+          <button onclick="quickQuery('pain or stress')" class="text-xs bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-full transition-colors">pain or stress</button>
+        </div>
+      </div>
+
+      <div id="query-loading" class="hidden flex justify-center items-center py-20">
+        <div class="spinner"></div>
+      </div>
+
+      <div id="query-error" class="hidden bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg"></div>
+
+      <div id="query-results"></div>
+    </div>
+
+  </main>
+
+  <!-- Footer -->
+  <footer class="bg-gray-800 text-white mt-16 py-8">
+    <div class="container mx-auto px-4 text-center">
+      <p class="text-gray-400">
+        <i class="fas fa-flask mr-2"></i>
+        Neurosynth Frontend | Backend API:
+        <a href="https://mil.psy.ntu.edu.tw:5000" target="_blank" class="text-blue-400 hover:text-blue-300">mil.psy.ntu.edu.tw:5000</a>
+      </p>
+      <p class="text-gray-500 text-sm mt-2">Built with Tailwind CSS & AJAX</p>
+    </div>
+  </footer>
 
   <script>
-    async function fetchTerms() {
-      const out = document.getElementById('out');
-      out.textContent = 'Requesting…';
-      try {
-        const resp = await fetch('https://mil.psy.ntu.edu.tw:5000/terms');
-        let info = `HTTP ${resp.status} ${resp.statusText}\n`;
-        const ct = resp.headers.get('content-type') || '';
+    // API Base URL
+    const API_BASE = 'https://mil.psy.ntu.edu.tw:5000';
 
-        if (!resp.ok) {
-          const text = await resp.text();
-          out.textContent = info + '\n' + text;
-          return;
-        }
+    // Global data storage
+    let allTermsData = [];
 
-        if (ct.includes('application/json')) {
-          const data = await resp.json();
-          out.textContent = info + '\n' + JSON.stringify(data, null, 2);
-        } else {
-          const text = await resp.text();
-          out.textContent = info + '\n' + text;
-        }
-      } catch (err) {
-        document.getElementById('out').textContent =
-          'Error: ' + (err && err.message ? err.message : String(err)) +
-          '\n\nCommon causes:\n1) CORS not allowed by the server\n2) Opening this file via file:// instead of a local server\n3) Network/server issues';
+    // Tab Navigation
+    function showTab(tabName) {
+      // Hide all tabs
+      document.querySelectorAll('.tab-content').forEach(tab => {
+        tab.classList.add('hidden');
+      });
+
+      // Remove active state from all buttons
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('border-blue-500', 'text-blue-600');
+        btn.classList.add('border-transparent', 'text-gray-600');
+      });
+
+      // Show selected tab
+      document.getElementById(`content-${tabName}`).classList.remove('hidden');
+      document.getElementById(`content-${tabName}`).classList.add('fade-in');
+
+      // Highlight active button
+      const activeBtn = document.getElementById(`tab-${tabName}`);
+      activeBtn.classList.add('border-blue-500', 'text-blue-600');
+      activeBtn.classList.remove('border-transparent', 'text-gray-600');
+
+      // Load data if needed
+      if (tabName === 'terms' && allTermsData.length === 0) {
+        fetchAllTerms();
       }
     }
 
-    document.getElementById('btn').addEventListener('click', fetchTerms);
-    fetchTerms();
+    // ========== TAB 1: ALL TERMS ==========
+    async function fetchAllTerms() {
+      const loading = document.getElementById('terms-loading');
+      const error = document.getElementById('terms-error');
+      const results = document.getElementById('terms-results');
+
+      loading.classList.remove('hidden');
+      error.classList.add('hidden');
+      results.innerHTML = '';
+
+      try {
+        const response = await fetch(`${API_BASE}/terms`);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+        allTermsData = data;
+
+        loading.classList.add('hidden');
+        displayTerms(data);
+
+      } catch (err) {
+        loading.classList.add('hidden');
+        error.classList.remove('hidden');
+        error.innerHTML = `
+          <div class="flex items-center">
+            <i class="fas fa-exclamation-circle mr-3 text-xl"></i>
+            <div>
+              <strong>Error:</strong> ${err.message}
+              <p class="text-sm mt-1">Make sure the API server is running and CORS is enabled.</p>
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function displayTerms(terms) {
+      const results = document.getElementById('terms-results');
+      results.innerHTML = '';
+
+      if (!terms || terms.length === 0) {
+        results.innerHTML = '<p class="text-gray-500 text-center col-span-full">No terms found.</p>';
+        return;
+      }
+
+      terms.forEach((term, index) => {
+        const card = document.createElement('div');
+        card.className = 'term-card bg-white rounded-lg shadow-md p-4 hover:shadow-xl cursor-pointer border-l-4 border-blue-500';
+        card.innerHTML = `
+          <h3 class="font-bold text-lg text-gray-800 mb-2">
+            <i class="fas fa-tag text-blue-500 mr-2"></i>${term}
+          </h3>
+          <button onclick="quickSearch('${term}')" class="text-sm text-blue-600 hover:text-blue-800 font-semibold">
+            <i class="fas fa-arrow-right mr-1"></i>Find related
+          </button>
+        `;
+        results.appendChild(card);
+
+        // Add staggered animation
+        setTimeout(() => {
+          card.classList.add('fade-in');
+        }, index * 20);
+      });
+    }
+
+    function filterTerms() {
+      const filter = document.getElementById('terms-filter').value.toLowerCase();
+      const filtered = allTermsData.filter(term => term.toLowerCase().includes(filter));
+      displayTerms(filtered);
+    }
+
+    // ========== TAB 2: RELATED TERMS SEARCH ==========
+    function quickSearch(term) {
+      showTab('search');
+      document.getElementById('search-input').value = term;
+      setTimeout(() => searchRelatedTerms(), 100);
+    }
+
+    async function searchRelatedTerms() {
+      const input = document.getElementById('search-input').value.trim();
+
+      if (!input) {
+        alert('Please enter a term to search');
+        return;
+      }
+
+      const loading = document.getElementById('search-loading');
+      const error = document.getElementById('search-error');
+      const results = document.getElementById('search-results');
+
+      loading.classList.remove('hidden');
+      error.classList.add('hidden');
+      results.innerHTML = '';
+
+      try {
+        const response = await fetch(`${API_BASE}/terms/${encodeURIComponent(input)}`);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        loading.classList.add('hidden');
+        displayRelatedTerms(input, data);
+
+      } catch (err) {
+        loading.classList.add('hidden');
+        error.classList.remove('hidden');
+        error.innerHTML = `
+          <div class="flex items-center">
+            <i class="fas fa-exclamation-circle mr-3 text-xl"></i>
+            <div>
+              <strong>Error:</strong> ${err.message}
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function displayRelatedTerms(searchTerm, data) {
+      const results = document.getElementById('search-results');
+      results.innerHTML = '';
+
+      const container = document.createElement('div');
+      container.className = 'bg-white rounded-lg shadow-lg p-6 fade-in';
+
+      container.innerHTML = `
+        <div class="mb-6">
+          <h3 class="text-xl font-bold text-gray-800 mb-2">
+            <i class="fas fa-search text-green-500 mr-2"></i>
+            Results for: <span class="text-green-600">${searchTerm}</span>
+          </h3>
+          <p class="text-gray-600">Found ${Object.keys(data).length} related terms</p>
+        </div>
+      `;
+
+      const grid = document.createElement('div');
+      grid.className = 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4';
+
+      Object.entries(data).forEach(([term, value]) => {
+        const card = document.createElement('div');
+        card.className = 'bg-gradient-to-br from-green-50 to-blue-50 border border-green-200 rounded-lg p-4 hover:shadow-lg transition-all';
+        card.innerHTML = `
+          <div class="flex items-center justify-between">
+            <h4 class="font-bold text-gray-800">${term}</h4>
+            <span class="bg-green-500 text-white text-xs px-2 py-1 rounded-full">${typeof value === 'number' ? value.toFixed(3) : value}</span>
+          </div>
+        `;
+        grid.appendChild(card);
+      });
+
+      container.appendChild(grid);
+      results.appendChild(container);
+    }
+
+    // ========== TAB 3: LOGICAL QUERY ==========
+    function quickQuery(query) {
+      showTab('query');
+      document.getElementById('query-input').value = query;
+      setTimeout(() => executeQuery(), 100);
+    }
+
+    async function executeQuery() {
+      const input = document.getElementById('query-input').value.trim();
+
+      if (!input) {
+        alert('Please enter a query');
+        return;
+      }
+
+      const loading = document.getElementById('query-loading');
+      const error = document.getElementById('query-error');
+      const results = document.getElementById('query-results');
+
+      loading.classList.remove('hidden');
+      error.classList.add('hidden');
+      results.innerHTML = '';
+
+      try {
+        const response = await fetch(`${API_BASE}/query/${encodeURIComponent(input)}/studies`);
+
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+
+        const data = await response.json();
+
+        loading.classList.add('hidden');
+        displayQueryResults(input, data);
+
+      } catch (err) {
+        loading.classList.add('hidden');
+        error.classList.remove('hidden');
+        error.innerHTML = `
+          <div class="flex items-center">
+            <i class="fas fa-exclamation-circle mr-3 text-xl"></i>
+            <div>
+              <strong>Error:</strong> ${err.message}
+            </div>
+          </div>
+        `;
+      }
+    }
+
+    function displayQueryResults(query, data) {
+      const results = document.getElementById('query-results');
+      results.innerHTML = '';
+
+      const container = document.createElement('div');
+      container.className = 'bg-white rounded-lg shadow-lg p-6 fade-in';
+
+      const studyCount = Array.isArray(data) ? data.length : (data.studies ? data.studies.length : 0);
+
+      container.innerHTML = `
+        <div class="mb-6">
+          <h3 class="text-xl font-bold text-gray-800 mb-2">
+            <i class="fas fa-flask text-purple-500 mr-2"></i>
+            Query Results: <span class="text-purple-600">${query}</span>
+          </h3>
+          <p class="text-gray-600">
+            <i class="fas fa-file-alt mr-2"></i>
+            Found ${studyCount} studies
+          </p>
+        </div>
+      `;
+
+      // Handle different response formats
+      let studies = Array.isArray(data) ? data : (data.studies || []);
+
+      if (studies.length === 0) {
+        container.innerHTML += '<p class="text-gray-500 text-center py-8">No studies found for this query.</p>';
+      } else {
+        const grid = document.createElement('div');
+        grid.className = 'space-y-3 max-h-96 overflow-y-auto';
+
+        studies.forEach((study, index) => {
+          const card = document.createElement('div');
+          card.className = 'bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-200 rounded-lg p-4 hover:shadow-md transition-all';
+          card.innerHTML = `
+            <div class="flex items-start justify-between">
+              <div class="flex-1">
+                <span class="inline-block bg-purple-500 text-white text-xs px-2 py-1 rounded-full mb-2">Study #${index + 1}</span>
+                <p class="font-mono text-sm text-gray-700">${study}</p>
+              </div>
+            </div>
+          `;
+          grid.appendChild(card);
+        });
+
+        container.appendChild(grid);
+      }
+
+      results.appendChild(container);
+    }
+
+    function clearQuery() {
+      document.getElementById('query-input').value = '';
+      document.getElementById('query-results').innerHTML = '';
+      document.getElementById('query-error').classList.add('hidden');
+    }
+
+    // Initialize: Show first tab on load
+    window.addEventListener('DOMContentLoaded', () => {
+      showTab('terms');
+    });
   </script>
 </body>
 </html>
-
